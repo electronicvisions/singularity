@@ -211,8 +211,22 @@ static int prepare_stage(int stage, struct cConfig *config) {
                 }
             }
         } else if ( config->container.isSuid ) {
-            if ( prctl(PR_SET_SECUREBITS, SECBIT_NO_SETUID_FIXUP|SECBIT_NO_SETUID_FIXUP_LOCKED) < 0 ) {
-                fatalf("Failed to set securebits: %s\n", strerror(errno));
+            int securebits_current = prctl(PR_GET_SECUREBITS);
+            int securebits_to_set = 0;
+
+            // only set secure bits that are not set yet
+            if ((securebits_current & SECBIT_NO_SETUID_FIXUP) == 0) {
+                securebits_to_set |= SECBIT_NO_SETUID_FIXUP;
+            }
+            if ((securebits_current & SECBIT_NO_SETUID_FIXUP_LOCKED) == 0) {
+                securebits_to_set |= SECBIT_NO_SETUID_FIXUP_LOCKED;
+            }
+            if ( securebits_to_set > 0 ) {
+                if ( prctl(PR_SET_SECUREBITS, securebits_to_set) < 0 ) {
+                    fatalf("Failed to set securebits: %s\n", strerror(errno));
+                }
+            } else {
+                debugf("Securebits already set.\n");
             }
 
             if ( setresuid(uid, uid, uid) < 0 ) {
