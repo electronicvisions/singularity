@@ -147,16 +147,23 @@ static int prepare_stage(int stage, struct cConfig *config) {
 
     int last_cap;
     for ( last_cap = CAPSET_MAX; ; last_cap-- ) {
-        if ( prctl(PR_CAPBSET_READ, last_cap) > 0 || last_cap == 0 ) {
+        if ( prctl(PR_CAPBSET_READ, last_cap) > 0 ) {
+            ++last_cap;
+            break;
+        }
+        if ( last_cap == 0 ) {
             break;
         }
     }
 
     int caps_index;
-    for ( caps_index = 0; caps_index <= last_cap; caps_index++ ) {
+    for ( caps_index = 0; caps_index < last_cap; caps_index++ ) {
         if ( !(config->capabilities.bounding & (1ULL << caps_index)) ) {
-            if ( prctl(PR_CAPBSET_DROP, caps_index) < 0 ) {
-                fatalf("Failed to drop bounding capabilities set: %s\n", strerror(errno));
+            // check if capability is set to begin with
+            if ( prctl(PR_CAPBSET_READ, caps_index) > 0 ) {
+                if ( prctl(PR_CAPBSET_DROP, caps_index) < 0 ) {
+                    fatalf("Failed to drop bounding capabilities set: %s\n", strerror(errno));
+                }
             }
         }
     }
@@ -231,7 +238,7 @@ static int prepare_stage(int stage, struct cConfig *config) {
 
 #ifdef USER_CAPABILITIES
     // set ambient capabilities if supported
-    for ( caps_index = 0; caps_index <= last_cap; caps_index++ ) {
+    for ( caps_index = 0; caps_index < last_cap; caps_index++ ) {
         if ( (config->capabilities.ambient & (1ULL << caps_index)) ) {
             if ( prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, caps_index, 0, 0) < 0 ) {
                 fatalf("Failed to set ambient capability: %s\n", strerror(errno));
