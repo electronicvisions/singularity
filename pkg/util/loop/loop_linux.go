@@ -101,8 +101,15 @@ func (loop *Device) AttachFromFile(image *os.File, mode int, number *int) error 
 		return fmt.Errorf("failed to set close-on-exec on loop device %s: %s", path, err.Error())
 	}
 
-	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(loopFd), CmdSetStatus64, uintptr(unsafe.Pointer(loop.Info))); err != 0 {
-		return fmt.Errorf("failed to set loop flags on loop device: %s", syscall.Errno(err))
+	for {
+		if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(loopFd), CmdSetStatus64, uintptr(unsafe.Pointer(loop.Info))); err != 0 {
+			if err == syscall.EAGAIN {
+				// loop_set_status() can temporarily fail with EAGAIN
+				// (cf. https://github.com/torvalds/linux/blob/d0a255e795ab976481565f6ac178314b34fbf891/drivers/block/loop.c#L1280)
+				continue
+			}
+			return fmt.Errorf("failed to set loop flags on loop device: %s", syscall.Errno(err))
+		}
 	}
 
 	return nil
